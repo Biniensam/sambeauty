@@ -1,0 +1,27 @@
+import { clerkMiddleware } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
+
+// Check if Clerk is properly configured
+const isClerkConfigured = process.env.CLERK_SECRET_KEY && process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
+export default function middleware(request: any) {
+  // If Clerk is not configured, skip middleware
+  if (!isClerkConfigured) {
+    console.warn("Clerk not configured, skipping middleware");
+    return NextResponse.next();
+  }
+
+  try {
+    return clerkMiddleware(request);
+  } catch (error) {
+    console.error("Clerk middleware error:", error);
+    // Fallback to allow the request to continue
+    return NextResponse.next();
+  }
+}
+
+export const config = {
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico).*)",
+  ],
+};
