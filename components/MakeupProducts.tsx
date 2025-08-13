@@ -421,7 +421,7 @@ const MakeupProducts = () => {
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">No Makeup Products Found</h3>
               <p className="text-gray-600 mb-6">
-                We couldn't find any makeup products matching your criteria.
+                We couldn&apos;t find any makeup products matching your criteria.
               </p>
               <div className="space-y-3">
                 <button

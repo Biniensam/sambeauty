@@ -8,7 +8,8 @@ import { useLanguage } from './LanguageProvider'
 import { getProductImage } from '@/utils/imageUtils'
 import { apiService, CheckoutData } from '@/services/api'
 import { useNotification } from './NotificationContext'
-import { useUser, SignedIn, SignedOut, RedirectToSignIn } from '@clerk/nextjs'
+import { useUser } from '@clerk/nextjs'
+
 
 interface CheckoutFormProps {
   onBack?: () => void
@@ -19,7 +20,20 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ onBack }) => {
   const { t } = useLanguage()
   const router = useRouter()
   const { showSuccess, showError } = useNotification()
-  const { user, isLoaded } = useUser()
+  const { user, isSignedIn } = useUser()
+
+  // Helper function to get order ID from URL if editing
+  const getOrderIdFromUrl = () => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search)
+      return urlParams.get('edit')
+    }
+    return null
+  }
+
+  const orderId = getOrderIdFromUrl()
+  const isEditing = !!orderId
+
   
   const [formData, setFormData] = useState({
     customerName: '',
@@ -34,17 +48,54 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ onBack }) => {
   
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Pre-fill form with Clerk user data
+  // Auto-fill form data when user is signed in or editing an order
   useEffect(() => {
-    if (isLoaded && user) {
+    if (isSignedIn && user) {
       setFormData(prev => ({
         ...prev,
         customerName: user.fullName || user.firstName || '',
         email: user.primaryEmailAddress?.emailAddress || '',
-        phoneNumber: user.phoneNumbers?.[0]?.phoneNumber || '',
+        // You can also auto-fill other fields if available in user metadata
+        // phoneNumber: user.publicMetadata?.phoneNumber || '',
+        // street: user.publicMetadata?.street || '',
+        // city: user.publicMetadata?.city || '',
+        // region: user.publicMetadata?.region || '',
+        // postalCode: user.publicMetadata?.postalCode || '',
       }))
     }
-  }, [isLoaded, user])
+
+    // If editing an order, fetch and pre-fill order data
+    if (isEditing && orderId) {
+      // You can implement API call to fetch order details here
+      // For now, we'll show a message that this is an edit
+      console.log('Editing order:', orderId)
+    }
+
+    // If user is signed in, try to fetch their previous order data to pre-fill address fields
+    if (isSignedIn && user?.primaryEmailAddress?.emailAddress) {
+      const fetchPreviousOrderData = async () => {
+        try {
+          const response = await apiService.getCustomerOrdersByContact(user.primaryEmailAddress?.emailAddress)
+          if (response.success && response.data && response.data.length > 0) {
+            // Get the most recent order
+            const latestOrder = response.data[0]
+            if (latestOrder.shippingAddress) {
+              setFormData(prev => ({
+                ...prev,
+                street: latestOrder.shippingAddress.street || '',
+                city: latestOrder.shippingAddress.city || '',
+                region: latestOrder.shippingAddress.region || '',
+              }))
+            }
+          }
+        } catch (error) {
+          console.log('Could not fetch previous order data:', error)
+        }
+      }
+      
+      fetchPreviousOrderData()
+    }
+  }, [isSignedIn, user, isEditing, orderId])
 
   const shippingCost = cartState.total < 2000 ? 500 : 0
   const grandTotal = cartState.total + shippingCost
@@ -66,10 +117,9 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ onBack }) => {
       return
     }
 
-    if (!user) {
-      showError('Please sign in to complete your order')
-      return
-    }
+
+
+
 
     setIsSubmitting(true)
 
@@ -100,18 +150,27 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ onBack }) => {
         shippingCost,
         notes: 'Order placed from website',
         paymentMethod: formData.paymentMethod,
-        customerId: user.id, // Use Clerk user ID
+        customerId: isSignedIn ? user?.id || 'guest' : 'guest', // Use actual user ID if signed in
       }
 
       const response = await apiService.submitCheckout(checkoutData)
       
       if (response.success) {
-        showSuccess(`Order placed successfully! Order #${response.data?.orderNumber || 'N/A'}`)
+        const message = isEditing 
+          ? `Order updated successfully! Order #${response.data?.orderNumber || 'N/A'}`
+          : `Order placed successfully! Order #${response.data?.orderNumber || 'N/A'}`
         
-        // Clear cart after successful order
+        showSuccess(message)
+        
+        // Clear cart after successful order (only for new orders)
+        if (!isEditing) {
+          setTimeout(() => {
+            clearCart()
+          }, 3000)
+        }
+        
+        // Redirect to account page to view the order
         setTimeout(() => {
-          clearCart()
-          // Redirect to account page to view the order
           router.push('/account')
         }, 3000)
       } else {
@@ -165,12 +224,25 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ onBack }) => {
             <ArrowLeft size={20} />
             Back to Cart
           </button>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">{t('checkout')}</h1>
-          <p className="text-gray-500 dark:text-gray-400">Complete your order</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+            {isEditing ? 'Edit Order' : t('checkout')}
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400">
+            {isEditing 
+              ? 'Update your order information' 
+              : 'Complete your order'
+            }
+          </p>
+          {isEditing && (
+            <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                📝 You are editing order #{orderId}. Your customer information has been pre-filled.
+              </p>
+            </div>
+          )}
         </div>
 
-        <SignedIn>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Checkout Form */}
             <div className="lg:col-span-1">
               <div className="card">
@@ -183,19 +255,22 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ onBack }) => {
                   <div>
                     <label htmlFor="customerName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Full Name *
+                      {isSignedIn && user?.fullName && (
+                        <span className="ml-2 text-xs text-green-600 dark:text-green-400">(Auto-filled from your account)</span>
+                      )}
                     </label>
-                    <input
-                      type="text"
-                      id="customerName"
-                      name="customerName"
-                      value={formData.customerName}
-                      onChange={handleInputChange}
-                      placeholder={t('enterYourFullName')}
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-beauty-pink focus:border-transparent dark:bg-gray-800 dark:text-gray-100 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
-                      required
-                      disabled={isLoaded && !!user}
-                      title={isLoaded && !!user ? "Name is automatically filled from your account" : ""}
-                    />
+                                         <input
+                       type="text"
+                       id="customerName"
+                       name="customerName"
+                       value={formData.customerName}
+                       onChange={handleInputChange}
+                       placeholder={t('enterYourFullName')}
+                       className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-beauty-pink focus:border-transparent dark:bg-gray-800 dark:text-gray-100 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
+                       required
+                       disabled={isSignedIn && !!user?.fullName}
+                       title={isSignedIn && !!user?.fullName ? "This field is auto-filled from your account and cannot be edited" : ""}
+                     />
                   </div>
 
                   {/* Phone Field */}
@@ -217,20 +292,23 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ onBack }) => {
 
                   {/* Email Field */}
                   <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    <label htmlFor="email" className="block text-gray-700 dark:text-gray-300 mb-2">
                       Email
+                      {isSignedIn && user?.primaryEmailAddress?.emailAddress && (
+                        <span className="ml-2 text-xs text-green-600 dark:text-green-400">(Auto-filled from your account)</span>
+                      )}
                     </label>
-                    <input
-                      type="email"
-                      id="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleInputChange}
-                      placeholder="Enter your email address"
-                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-beauty-pink focus:border-transparent dark:bg-gray-800 dark:text-gray-100 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
-                      disabled={isLoaded && !!user}
-                      title={isLoaded && !!user ? "Email is automatically filled from your account" : ""}
-                    />
+                                         <input
+                       type="email"
+                       id="email"
+                       name="email"
+                       value={formData.email}
+                       onChange={handleInputChange}
+                       placeholder="Enter your email address"
+                       className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-beauty-pink focus:border-transparent dark:bg-gray-800 dark:text-gray-100 disabled:bg-gray-100 dark:disabled:bg-gray-700 disabled:cursor-not-allowed"
+                       disabled={isSignedIn && !!user?.primaryEmailAddress?.emailAddress}
+                       title={isSignedIn && !!user?.primaryEmailAddress?.emailAddress ? "This field is auto-filled from your account and cannot be edited" : ""}
+                     />
                   </div>
 
                   {/* Shipping Information Section */}
@@ -242,6 +320,9 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ onBack }) => {
                   <div>
                     <label htmlFor="street" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Street Address *
+                      {isSignedIn && formData.street && (
+                        <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">(Pre-filled from previous order)</span>
+                      )}
                     </label>
                     <input
                       type="text"
@@ -259,6 +340,9 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ onBack }) => {
                   <div>
                     <label htmlFor="city" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       City *
+                      {isSignedIn && formData.city && (
+                        <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">(Pre-filled from previous order)</span>
+                      )}
                     </label>
                     <input
                       type="text"
@@ -276,6 +360,9 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ onBack }) => {
                   <div>
                     <label htmlFor="region" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Region *
+                      {isSignedIn && formData.region && (
+                        <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">(Pre-filled from previous order)</span>
+                      )}
                     </label>
                     <input
                       type="text"
@@ -331,13 +418,13 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ onBack }) => {
                   </div>
 
                   {/* Submit Button */}
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="w-full btn-primary py-3 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isSubmitting ? 'Processing...' : 'Place Order'}
-                  </button>
+                                     <button
+                     type="submit"
+                     disabled={isSubmitting}
+                     className="w-full btn-primary py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                   >
+                     {isSubmitting ? 'Processing...' : (isEditing ? 'Update Order' : 'Place Order')}
+                   </button>
                 </form>
               </div>
             </div>
@@ -412,34 +499,6 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ onBack }) => {
               </div>
             </div>
           </div>
-        </SignedIn>
-
-        <SignedOut>
-          <div className="max-w-4xl mx-auto">
-            <div className="card p-8 text-center">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-                Sign in to complete your order
-              </h2>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Please sign in or create an account to proceed with checkout
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <button
-                  onClick={() => router.push('/sign-in')}
-                  className="btn-primary px-6 py-3"
-                >
-                  Sign In
-                </button>
-                <button
-                  onClick={() => router.push('/sign-up')}
-                  className="btn-secondary px-6 py-3"
-                >
-                  Create Account
-                </button>
-              </div>
-            </div>
-          </div>
-        </SignedOut>
       </div>
     </div>
   )

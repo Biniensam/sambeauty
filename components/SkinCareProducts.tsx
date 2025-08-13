@@ -455,7 +455,7 @@ const SkinCareProducts = () => {
                   <option value="the-ordinary">The Ordinary</option>
                   <option value="cerave">CeraVe</option>
                   <option value="la-roche-posay">La Roche-Posay</option>
-                  <option value="paulas-choice">Paula's Choice</option>
+                  <option value="paulas-choice">Paula&apos;s Choice</option>
                 </select>
               </div>
             </div>
@@ -545,7 +545,7 @@ const SkinCareProducts = () => {
               <h3 className="text-xl font-semibold text-gray-900 mb-2">No Skincare Products Found</h3>
               <p className="text-gray-600 mb-6">
                 {error ? 'Unable to load products at the moment. Please try again later.' : 
-                 'We couldn\'t find any skincare products matching your criteria.'}
+                 'We couldn&apos;t find any skincare products matching your criteria.'}
               </p>
               <div className="space-y-3">
                 <button

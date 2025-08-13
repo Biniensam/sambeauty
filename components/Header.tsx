@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useEffect } from 'react'
-import { Search, ShoppingBag, User, X, Heart } from 'lucide-react'
+import { Search, ShoppingBag, X, Heart } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCart } from './CartContext'
@@ -178,9 +178,7 @@ const Header = () => {
               </Link>
 
               {/* User account - Desktop */}
-              <div className="hidden lg:block">
-                <UserButton />
-              </div>
+              <UserButton variant="header" />
             </div>
           </div>
 

@@ -508,7 +508,7 @@ const HairProducts = () => {
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Unable to Load Hair Products</h3>
               <p className="text-gray-600 mb-6">
-                We're having trouble loading hair care products at the moment. Please try again later.
+                We&apos;re having trouble loading hair care products at the moment. Please try again later.
               </p>
               <button onClick={() => window.location.reload()} className="btn-primary w-full">
                 Try Again
@@ -563,7 +563,7 @@ const HairProducts = () => {
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">No Hair Products Found</h3>
               <p className="text-gray-600 mb-6">
-                We couldn't find any hair care products matching your criteria.
+                We couldn&apos;t find any hair care products matching your criteria.
               </p>
               <div className="space-y-3">
                 <button

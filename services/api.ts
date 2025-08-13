@@ -259,13 +259,13 @@ class ApiService {
   }
 
   // Get product categories
-  async getCategories(): Promise<ApiResponse<string[]>> {
-    return this.request<string[]>(`/products/categories`);
+  async getCategories(): Promise<ApiResponse<Array<{ category: string; count: number }>>> {
+    return this.request<Array<{ category: string; count: number }>>(`/products/categories`);
   }
 
   // Get product brands
-  async getBrands(): Promise<ApiResponse<string[]>> {
-    return this.request<string[]>(`/products/brands`);
+  async getBrands(): Promise<ApiResponse<Array<{ brand: string; count: number }>>> {
+    return this.request<Array<{ brand: string; count: number }>>(`/products/brands`);
   }
 
   // Search products
@@ -341,6 +341,15 @@ class ApiService {
     
     return this.request<Customer>(`/customers/find?${params.toString()}`);
   }
+
+  // Get customer orders by email or phone number
+  async getCustomerOrdersByContact(email?: string, phoneNumber?: string): Promise<ApiResponse<CustomerOrder[]>> {
+    const params = new URLSearchParams();
+    if (email) params.append('email', email);
+    if (phoneNumber) params.append('phoneNumber', phoneNumber);
+    
+    return this.request<CustomerOrder[]>(`/customers/orders/find?${params.toString()}`);
+  }
 }
 
 // Create a singleton instance
@@ -363,4 +372,5 @@ export const {
   getCustomerOrders,
   updateCustomer,
   findCustomerByContact,
+  getCustomerOrdersByContact,
 } = apiService;

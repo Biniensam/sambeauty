@@ -3,12 +3,13 @@
 import React, { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Heart, ShoppingBag, User, Menu, X, Minus, Plus, Star, ArrowRight, LogOut, LogIn, UserPlus } from 'lucide-react'
+import { Home, Heart, ShoppingBag, Menu, X, Minus, Plus, Star, ArrowRight, LogOut } from 'lucide-react'
 import { useCart } from './CartContext'
 import { useFavorites } from './FavoritesContext'
 import { useLanguage } from './LanguageProvider'
 import { getProductImage } from '@/utils/imageUtils'
-import { useUser, useClerk } from '@clerk/nextjs'
+import UserButton from './UserButton'
+import { SignOutButton, useUser } from '@clerk/nextjs'
 
 const BottomNavigation = () => {
   const pathname = usePathname()
@@ -16,7 +17,6 @@ const BottomNavigation = () => {
   const { state: favoritesState, removeFavorite, addFavorite, isFavorite } = useFavorites()
   const { t } = useLanguage()
   const { isSignedIn, user } = useUser()
-  const { signOut } = useClerk()
   const [isCategoriesOpen, setIsCategoriesOpen] = useState(false)
   const [isCartOpen, setIsCartOpen] = useState(false)
   const [isFavoritesOpen, setIsFavoritesOpen] = useState(false)
@@ -150,13 +150,53 @@ const BottomNavigation = () => {
       badge: cartState.itemCount > 0 ? cartState.itemCount : undefined
     },
     {
-      name: isSignedIn ? t('account') : t('account'),
-      icon: User,
+      name: t('account'),
+      icon: null,
       href: null,
       isActive: isAccountOpen || pathname === '/account',
       onClick: () => setIsAccountOpen(!isAccountOpen)
     }
   ]
+
+  // Get the appropriate account icon based on sign-in method
+  const getAccountIcon = () => {
+    if (isSignedIn) {
+      // Check if user signed in with Google
+      const isGoogleAccount = user?.externalAccounts?.some(
+        account => account.provider === 'google'
+      )
+      
+      if (isGoogleAccount) {
+        // Get the Google profile image from external accounts
+        const googleAccount = user?.externalAccounts?.find(
+          account => account.provider === 'google'
+        )
+        const profileImage = googleAccount?.imageUrl
+        
+        if (profileImage) {
+          return (
+            <img
+              src={profileImage}
+              alt="Profile"
+              className="w-5 h-5 rounded-full object-cover"
+            />
+          )
+        }
+      }
+      // Fallback to user icon for non-Google accounts
+      return (
+        <div className="w-5 h-5 bg-pink-100 dark:bg-pink-900 rounded-full flex items-center justify-center">
+          <span className="text-xs text-pink-600 dark:text-pink-400">👤</span>
+        </div>
+      )
+    }
+    // Default icon for non-signed in users
+    return (
+      <div className="w-5 h-5 bg-pink-100 dark:bg-pink-900 rounded-full flex items-center justify-center">
+        <span className="text-xs text-pink-600 dark:text-pink-400">👤</span>
+      </div>
+    )
+  }
 
   return (
     <>
@@ -167,7 +207,15 @@ const BottomNavigation = () => {
             const Icon = item.icon
             const content = (
               <div className="relative">
-                {Icon && <Icon size={20} />}
+                {Icon ? (
+                  <Icon size={20} />
+                ) : item.name === t('account') ? (
+                  getAccountIcon()
+                ) : (
+                  <div className="w-5 h-5 bg-pink-100 dark:bg-pink-900 rounded-full flex items-center justify-center">
+                    <span className="text-xs text-pink-600 dark:text-pink-400">👤</span>
+                  </div>
+                )}
                 {item.badge && item.badge > 0 && (
                   <span className={`absolute -top-2 -right-2 text-xs rounded-full h-5 w-5 flex items-center justify-center ${
                     item.name === t('favorites') 
@@ -214,81 +262,81 @@ const BottomNavigation = () => {
           })}
         </div>
 
-                 {/* Categories Menu */}
-         {isCategoriesOpen && (
-                       <div 
-              ref={categoriesRef}
-              className="absolute bottom-full left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-xl rounded-t-2xl max-h-[70vh] overflow-hidden"
-            >
-             <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-               <div className="flex items-center justify-between">
-                 <div>
-                   <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                     {t('categories')}
-                   </h3>
-                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                     Explore our beauty collections
-                   </p>
-                 </div>
-                 <button
-                   onClick={() => setIsCategoriesOpen(false)}
-                   className="p-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                 >
-                   <X size={20} />
-                 </button>
-               </div>
-             </div>
-
-                           <div className="overflow-y-auto max-h-[50vh] p-4">
-               <div className="space-y-3">
-                 {categories.map((category) => (
-                   <Link
-                     key={category.name}
-                     href={category.href}
-                     onClick={() => setIsCategoriesOpen(false)}
-                     className={`block p-4 rounded-xl transition-all duration-200 hover:scale-[1.02] ${category.color} hover:shadow-md`}
-                   >
-                     <div className="flex items-center gap-4">
-                       <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl ${category.color} ${category.textColor}`}>
-                         <span>{category.icon}</span>
-                       </div>
-                       <div className="flex-1">
-                         <h4 className={`font-semibold text-gray-900 dark:text-gray-100 ${category.textColor}`}>
-                           {category.name}
-                         </h4>
-                         <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                           {category.description}
-                         </p>
-                       </div>
-                       <div className={`w-8 h-8 rounded-full flex items-center justify-center ${category.color} ${category.textColor}`}>
-                         <ArrowRight size={16} />
-                       </div>
-                     </div>
-                   </Link>
-                 ))}
-               </div>
-
-                               {/* Quick Actions Section */}
-                <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                  <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
-                    Quick Actions
-                  </h4>
-                  <div className="flex justify-center">
-                    <Link
-                      href="/products"
-                      onClick={() => setIsCategoriesOpen(false)}
-                      className="flex flex-col items-center p-3 rounded-lg bg-gradient-to-br from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 hover:from-pink-100 hover:to-purple-100 dark:hover:from-pink-900/30 dark:hover:to-purple-900/30 transition-all duration-200"
-                    >
-                      <span className="text-2xl mb-2">🛍️</span>
-                      <span className="text-xs font-medium text-gray-900 dark:text-gray-100 text-center">
-                        All Products
-                      </span>
-                    </Link>
-                  </div>
+        {/* Categories Menu */}
+        {isCategoriesOpen && (
+          <div 
+            ref={categoriesRef}
+            className="absolute bottom-full left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-xl rounded-t-2xl max-h-[70vh] overflow-hidden"
+          >
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                    {t('categories')}
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Explore our beauty collections
+                  </p>
                 </div>
-             </div>
-           </div>
-         )}
+                <button
+                  onClick={() => setIsCategoriesOpen(false)}
+                  className="p-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-y-auto max-h-[50vh] p-4">
+              <div className="space-y-3">
+                {categories.map((category) => (
+                  <Link
+                    key={category.name}
+                    href={category.href}
+                    onClick={() => setIsCategoriesOpen(false)}
+                    className={`block p-4 rounded-xl transition-all duration-200 hover:scale-[1.02] ${category.color} hover:shadow-md`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl ${category.color} ${category.textColor}`}>
+                        <span>{category.icon}</span>
+                      </div>
+                      <div className="flex-1">
+                        <h4 className={`font-semibold text-gray-900 dark:text-gray-100 ${category.textColor}`}>
+                          {category.name}
+                        </h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          {category.description}
+                        </p>
+                      </div>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${category.color} ${category.textColor}`}>
+                        <ArrowRight size={16} />
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+
+              {/* Quick Actions Section */}
+              <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                  Quick Actions
+                </h4>
+                <div className="flex justify-center">
+                  <Link
+                    href="/products"
+                    onClick={() => setIsCategoriesOpen(false)}
+                    className="flex flex-col items-center p-3 rounded-lg bg-gradient-to-br from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 hover:from-pink-100 hover:to-purple-100 dark:hover:from-pink-900/30 dark:hover:to-purple-900/30 transition-all duration-200"
+                  >
+                    <span className="text-2xl mb-2">🛍️</span>
+                    <span className="text-xs font-medium text-gray-900 dark:text-gray-100 text-center">
+                      All Products
+                    </span>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Cart Overlay */}
         {isCartOpen && (
@@ -573,10 +621,10 @@ const BottomNavigation = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                    {isSignedIn ? t('account') : t('account')}
+                    {t('account')}
                   </h3>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {isSignedIn ? 'Manage your account' : 'Sign in or create account'}
+                    Manage your account
                   </p>
                 </div>
                 <button
@@ -589,90 +637,39 @@ const BottomNavigation = () => {
             </div>
 
             <div className="overflow-y-auto max-h-[50vh] p-4">
-              {isSignedIn ? (
-                <div className="space-y-4">
-                  {/* User Info */}
-                  <div className="text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                    <div className="w-16 h-16 bg-pink-100 dark:bg-pink-900 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <User size={24} className="text-pink-600 dark:text-pink-400" />
-                    </div>
-                    <h4 className="font-semibold text-gray-900 dark:text-gray-100">
-                      {user?.firstName || user?.fullName || 'Welcome'}
-                    </h4>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {user?.emailAddresses?.[0]?.emailAddress}
-                    </p>
-                  </div>
-
-                  {/* Account Actions */}
-                  <div className="space-y-3">
-                    <Link
-                      href="/account"
-                      onClick={() => setIsAccountOpen(false)}
-                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      <User size={20} className="text-gray-600 dark:text-gray-400" />
-                      <span className="text-gray-900 dark:text-gray-100">Account Settings</span>
-                    </Link>
-                    
-                    <button
-                      onClick={async () => {
-                        try {
-                          await signOut()
-                          setIsAccountOpen(false)
-                        } catch (error) {
-                          console.error('Error signing out:', error)
-                        }
-                      }}
-                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors w-full text-left"
-                    >
-                      <LogOut size={20} className="text-red-600 dark:text-red-400" />
-                      <span className="text-red-600 dark:text-red-400">Sign Out</span>
-                    </button>
-                  </div>
+              <div className="space-y-4">
+                {/* User Info */}
+                <div className="text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <UserButton variant="mobile" />
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  {/* Sign In Option */}
-                  <Link
-                    href="/sign-in"
-                    onClick={() => setIsAccountOpen(false)}
-                    className="flex items-center gap-3 p-4 rounded-lg bg-gradient-to-r from-pink-50 to-purple-50 dark:from-pink-900/20 dark:to-purple-900/20 hover:from-pink-100 hover:to-purple-100 dark:hover:from-pink-900/30 dark:hover:to-purple-900/30 transition-all duration-200"
-                  >
-                    <div className="w-12 h-12 bg-pink-100 dark:bg-pink-900 rounded-full flex items-center justify-center">
-                      <LogIn size={20} className="text-pink-600 dark:text-pink-400" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-gray-900 dark:text-gray-100">Sign In</h4>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Access your account</p>
-                    </div>
-                    <ArrowRight size={16} className="text-gray-400" />
-                  </Link>
-
-                  {/* Sign Up Option */}
-                  <Link
-                    href="/sign-up"
-                    onClick={() => setIsAccountOpen(false)}
-                    className="flex items-center gap-3 p-4 rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-900/30 dark:hover:to-indigo-900/30 transition-all duration-200"
-                  >
-                    <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
-                      <UserPlus size={20} className="text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-gray-900 dark:text-gray-100">Sign Up</h4>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Create new account</p>
-                    </div>
-                    <ArrowRight size={16} className="text-gray-400" />
-                  </Link>
-
-                  {/* Guest Info */}
-                  <div className="text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Sign in to save favorites, track orders, and get personalized recommendations
-                    </p>
-                  </div>
-                </div>
-              )}
+                
+                                 {/* Account Actions */}
+                 <div className="space-y-3">
+                   {isSignedIn && (
+                     <>
+                       <Link
+                         href="/account"
+                         onClick={() => setIsAccountOpen(false)}
+                         className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                       >
+                         <span className="text-gray-900 dark:text-gray-100">Account Settings</span>
+                       </Link>
+                       
+                       
+                       
+                       <SignOutButton>
+                         <button
+                           onClick={() => setIsAccountOpen(false)}
+                           className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors w-full text-left"
+                         >
+                           <LogOut size={16} className="text-red-600 dark:text-red-400" />
+                           <span className="text-red-600 dark:text-red-400">Sign Out</span>
+                         </button>
+                       </SignOutButton>
+                     </>
+                   )}
+                 </div>
+              </div>
             </div>
           </div>
         )}

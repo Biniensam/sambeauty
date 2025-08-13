@@ -818,3 +818,268 @@ const filterProductsLocal = (filters: ProductFilters) => {
 
   return filteredProducts;
 };
+
+// New hook for fetching and organizing brands by category from database
+export const useBrands = () => {
+  const [state, setState] = useState<{
+    brandsByCategory: Array<{
+      category: string;
+      brands: Array<{
+        name: string;
+        rating: number;
+        followers: string;
+        isNew?: boolean;
+        isSale?: boolean;
+        isTrending?: boolean;
+        isPopular?: boolean;
+        productCount: number;
+        image?: string;
+      }>;
+    }>;
+    loading: boolean;
+    error: string | null;
+  }>({
+    brandsByCategory: [],
+    loading: true,
+    error: null,
+  });
+
+  useEffect(() => {
+    const fetchBrands = async () => {
+      setState(prev => ({ ...prev, loading: true, error: null }));
+      
+      try {
+        // Fetch products from database using the same pattern as FeaturedProducts
+        console.log('Fetching products from database to extract brand data...');
+        
+        // Use multiple product hooks like FeaturedProducts does
+        const [featuredResponse, newArrivalsResponse, bestSellersResponse, saleResponse] = await Promise.all([
+          apiService.getFeaturedProducts(100),
+          apiService.getNewArrivals(100),
+          apiService.getBestSellers(100),
+          apiService.getSaleProducts(100)
+        ]);
+        
+        // Log individual responses for debugging
+        console.log('API Responses:', {
+          featured: { success: featuredResponse.success, count: featuredResponse.data?.length || 0 },
+          newArrivals: { success: newArrivalsResponse.success, count: newArrivalsResponse.data?.length || 0 },
+          bestSellers: { success: bestSellersResponse.success, count: bestSellersResponse.data?.length || 0 },
+          sale: { success: saleResponse.success, count: saleResponse.data?.length || 0 }
+        });
+        
+        // Combine all products like FeaturedProducts does
+        const allProducts = [
+          ...(featuredResponse.success ? featuredResponse.data || [] : []),
+          ...(newArrivalsResponse.success ? newArrivalsResponse.data || [] : []),
+          ...(bestSellersResponse.success ? bestSellersResponse.data || [] : []),
+          ...(saleResponse.success ? saleResponse.data || [] : [])
+        ];
+        
+        // Remove duplicates based on _id (same as FeaturedProducts)
+        const uniqueProducts = allProducts.filter((product, index, self) => 
+          index === self.findIndex(p => p._id === product._id)
+        );
+        
+        console.log('Combined products from database:', uniqueProducts.length);
+        
+        if (uniqueProducts.length > 0) {
+          // Extract brands directly from products data
+          console.log('Processing products data to extract brands...');
+          const brandsData = organizeBrandsFromProducts(uniqueProducts);
+          
+          console.log('Extracted brands data:', brandsData);
+          
+          setState({
+            brandsByCategory: brandsData,
+            loading: false,
+            error: null,
+          });
+        } else {
+          // Fallback: try to get products from general endpoint
+          console.warn('No products from specific endpoints, trying general products API...');
+          try {
+            const generalResponse = await apiService.getProducts({ limit: 200 });
+            if (generalResponse.success && generalResponse.data && generalResponse.data.length > 0) {
+              console.log('Fallback products found:', generalResponse.data.length);
+              const brandsData = organizeBrandsFromProducts(generalResponse.data);
+              setState({
+                brandsByCategory: brandsData,
+                loading: false,
+                error: null,
+              });
+            } else {
+              // No products available from any source
+              console.warn('No products found in database from any endpoint');
+              setState({
+                brandsByCategory: [],
+                loading: false,
+                error: 'No products available in database',
+              });
+            }
+          } catch (fallbackError) {
+            console.error('Fallback API also failed:', fallbackError);
+            setState({
+              brandsByCategory: [],
+              loading: false,
+              error: 'No products available in database',
+            });
+          }
+        }
+      } catch (error) {
+        // No fallback to local data - only use database
+        console.error('Products API error:', error);
+        setState({
+          brandsByCategory: [],
+          loading: false,
+          error: 'Failed to connect to database',
+        });
+      }
+    };
+
+    fetchBrands();
+  }, []);
+
+  return state;
+};
+
+
+
+
+
+
+// Helper function to format follower count
+const formatFollowers = (count: number): string => {
+  if (count >= 1000000) {
+    return `${(count / 1000000).toFixed(1)}M`;
+  } else if (count >= 1000) {
+    return `${(count / 1000).toFixed(1)}K`;
+  }
+  return count.toString();
+};
+
+// Helper function to organize brands by category from products (exact database data)
+const organizeBrandsFromProducts = (products: Product[]) => {
+  const categoryMap = new Map<string, Map<string, {
+    name: string;
+    rating: number;
+    followers: string;
+    isNew: boolean;
+    isSale: boolean;
+    isTrending: boolean;
+    isPopular: boolean;
+    productCount: number;
+    totalRating: number;
+    totalReviews: number;
+    image?: string;
+    totalPrice: number;
+    minPrice: number;
+    maxPrice: number;
+    hasDiscount: boolean;
+    luxuryBrand: boolean;
+    cleanBeauty: boolean;
+    crueltyFree: boolean;
+    vegan: boolean;
+  }>>();
+
+  // Process each product to extract exact brand information from database
+  products.forEach(product => {
+    // Handle database API format (_id)
+    const productId = product._id;
+    if (!productId) return; // Skip products without ID
+    
+    // Use exact category from database, fallback to productType if category is not set
+    const category = product.category || product.productType || 'Other';
+    const brandName = product.brand;
+    
+    if (!brandName) return; // Skip products without brand
+    
+    if (!categoryMap.has(category)) {
+      categoryMap.set(category, new Map());
+    }
+    
+    const brandMap = categoryMap.get(category)!;
+    
+    if (!brandMap.has(brandName)) {
+      brandMap.set(brandName, {
+        name: brandName,
+        rating: 0,
+        followers: '0',
+        isNew: false,
+        isSale: false,
+        isTrending: false,
+        isPopular: false,
+        productCount: 0,
+        totalRating: 0,
+        totalReviews: 0,
+        image: product.image,
+        totalPrice: 0,
+        minPrice: product.price || 0,
+        maxPrice: product.price || 0,
+        hasDiscount: false,
+        luxuryBrand: false,
+        cleanBeauty: false,
+        crueltyFree: false,
+        vegan: false,
+      });
+    }
+    
+    const brand = brandMap.get(brandName)!;
+    brand.productCount++;
+    brand.totalRating += product.rating || 0;
+    brand.totalReviews += product.reviewCount || 0;
+    brand.totalPrice += product.price || 0;
+    
+    // Update price range
+    if (product.price) {
+      brand.minPrice = Math.min(brand.minPrice, product.price);
+      brand.maxPrice = Math.max(brand.maxPrice, product.price);
+    }
+    
+    // Update flags based on exact product properties from database
+    if (product.isNew) brand.isNew = true;
+    if (product.isSale || product.discount) brand.isSale = true;
+    if (product.isTrending) brand.isTrending = true;
+    if (product.discount) brand.hasDiscount = true;
+    if (product.luxury) brand.luxuryBrand = true;
+    if (product.cleanBeauty) brand.cleanBeauty = true;
+    if (product.crueltyFree) brand.crueltyFree = true;
+    if (product.vegan) brand.vegan = true;
+    
+    // Determine if brand is popular based on exact data
+    if (brand.productCount >= 3 || (product.rating && product.rating >= 4.5)) {
+      brand.isPopular = true;
+    }
+    
+    // Update image if not set (use first available product image)
+    if (!brand.image && product.image) {
+      brand.image = product.image;
+    }
+  });
+
+  // Convert to array format and calculate average ratings
+  const brandsByCategory = Array.from(categoryMap.entries()).map(([category, brandMap]) => ({
+    category,
+    brands: Array.from(brandMap.values()).map(brand => ({
+      name: brand.name,
+      rating: brand.totalReviews > 0 ? Math.round((brand.totalRating / brand.totalReviews) * 10) / 10 : 0,
+      followers: formatFollowers(brand.totalReviews),
+      isNew: brand.isNew,
+      isSale: brand.isSale,
+      isTrending: brand.isTrending,
+      isPopular: brand.isPopular,
+      productCount: brand.productCount,
+      image: brand.image,
+      // Additional brand data from database
+      averagePrice: brand.productCount > 0 ? Math.round(brand.totalPrice / brand.productCount) : 0,
+      priceRange: brand.minPrice !== brand.maxPrice ? `${brand.minPrice} - ${brand.maxPrice}` : brand.minPrice.toString(),
+      hasDiscount: brand.hasDiscount,
+      luxuryBrand: brand.luxuryBrand,
+      cleanBeauty: brand.cleanBeauty,
+      crueltyFree: brand.crueltyFree,
+      vegan: brand.vegan,
+    })).sort((a, b) => b.rating - a.rating) // Sort by rating
+  }));
+
+  return brandsByCategory;
+};

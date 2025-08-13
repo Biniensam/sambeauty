@@ -121,7 +121,7 @@ const HeaderSearchSuggestions: React.FC<HeaderSearchSuggestionsProps> = ({
                 className="flex items-center justify-center w-full px-3 py-2 text-sm font-medium text-pink-600 dark:text-pink-400 hover:bg-pink-50 dark:hover:bg-pink-900/20 rounded-md transition-colors"
               >
                 <Search className="w-4 h-4 mr-2" />
-                View all results "{query}"
+                View all results &quot;{query}&quot;
               </Link>
             </div>
           </div>

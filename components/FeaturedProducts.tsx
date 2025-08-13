@@ -147,7 +147,7 @@ const FeaturedProducts = () => {
                  Special Offers & Campaigns
                </h2>
                <p className="text-lg text-gray-600 max-w-2xl">
-                 Don't miss out on our exclusive deals and limited-time offers. Shop now before they're gone!
+                 Don&apos;t miss out on our exclusive deals and limited-time offers. Shop now before they&apos;re gone!
                </p>
              </div>
             <div className="mt-4 lg:mt-0">
@@ -337,7 +337,7 @@ const FeaturedProducts = () => {
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">No Featured Products Available</h3>
               <p className="text-gray-600 mb-6">
-                We're currently updating our featured products. Please check back soon for the latest beauty essentials.
+                We&apos;re currently updating our featured products. Please check back soon for the latest beauty essentials.
               </p>
               <div className="space-y-3">
                 <Link href="/products">

@@ -102,6 +102,7 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, searchParams
         img.src = getImageSrc(image)
       })
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product])
 
   // Handle image load events

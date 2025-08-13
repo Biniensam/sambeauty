@@ -8,7 +8,7 @@ import { ThemeProvider } from '@/components/ThemeContext'
 import { LanguageProvider } from '@/components/LanguageProvider'
 import { NotificationProvider } from '@/components/NotificationContext'
 import NotificationProviderComponent from '@/components/NotificationProvider'
-import { ClerkProvider } from '@/components/ClerkProvider'
+import ClerkProvider from '@/components/ClerkProvider'
 
 const inter = Inter({ subsets: ['latin'] })
 

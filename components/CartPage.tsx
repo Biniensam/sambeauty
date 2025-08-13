@@ -2,12 +2,13 @@
 
 import React from 'react'
 import { useRouter } from 'next/navigation'
-import { X, Minus, Plus, ArrowLeft, ShoppingBag, Heart, Star } from 'lucide-react'
+import { X, Minus, Plus, ArrowLeft, ShoppingBag, Heart, Star, LogIn } from 'lucide-react'
 import { useCart } from './CartContext'
 import { useFavorites } from './FavoritesContext'
 import Link from 'next/link'
 import { useLanguage } from './LanguageProvider'
 import { getProductImage } from '@/utils/imageUtils'
+import { useUser, SignInButton } from '@clerk/nextjs'
 
 interface CartPageProps {
   isSidebar?: boolean
@@ -18,6 +19,7 @@ const CartPage: React.FC<CartPageProps> = ({ isSidebar = false }) => {
   const { addFavorite, removeFavorite, isFavorite } = useFavorites()
   const router = useRouter()
   const { t } = useLanguage()
+  const { isSignedIn } = useUser()
 
   const handleQuantityChange = (id: string, newQuantity: number) => {
     if (newQuantity >= 1) {
@@ -215,12 +217,21 @@ const CartPage: React.FC<CartPageProps> = ({ isSidebar = false }) => {
                 </div>
               </div>
 
-                             <button 
-                               onClick={() => router.push('/checkout')}
-                               className="w-full btn-primary py-3 mb-4"
-                             >
-                 {t('checkout')}
-               </button>
+                             {isSignedIn ? (
+                               <button 
+                                 onClick={() => router.push('/checkout')}
+                                 className="w-full btn-primary py-3 mb-4"
+                               >
+                                 {t('checkout')}
+                               </button>
+                             ) : (
+                               <SignInButton mode="modal">
+                                 <button className="w-full btn-primary py-3 mb-4 flex items-center justify-center gap-2">
+                                   <LogIn size={20} />
+                                   Sign In to Checkout
+                                 </button>
+                               </SignInButton>
+                             )}
                
                <button className="w-full btn-secondary py-3" onClick={handleContinueShopping}>
                  {t('continueShopping')}
