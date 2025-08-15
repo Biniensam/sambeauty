@@ -1346,7 +1346,10 @@ const ProductDetails: React.FC<ProductDetailsProps> = ({ productId, searchParams
 
                     {/* Related products */}
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6 sm:mb-8">{t('youMightAlsoLike')}</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">{t('youMightAlsoLike')}</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 sm:mb-8">
+            Products from the same brand and category
+          </p>
           {relatedLoading ? (
             <div className="grid-responsive">
               {Array.from({ length: 4 }).map((_, index) => (

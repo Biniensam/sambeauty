@@ -1,3 +1,21 @@
 {
-  "/page": "app/page.js"
+  "/_not-found/page": "app/_not-found/page.js",
+  "/brands/page": "app/brands/page.js",
+  "/account/page": "app/account/page.js",
+  "/fragrance/page": "app/fragrance/page.js",
+  "/contact/page": "app/contact/page.js",
+  "/cart/page": "app/cart/page.js",
+  "/checkout/page": "app/checkout/page.js",
+  "/hair/page": "app/hair/page.js",
+  "/new-trending/page": "app/new-trending/page.js",
+  "/perfume/page": "app/perfume/page.js",
+  "/product/[id]/page": "app/product/[id]/page.js",
+  "/makeup/page": "app/makeup/page.js",
+  "/products/page": "app/products/page.js",
+  "/page": "app/page.js",
+  "/search/page": "app/search/page.js",
+  "/sign-in/page": "app/sign-in/page.js",
+  "/skin-care/page": "app/skin-care/page.js",
+  "/sign-up/page": "app/sign-up/page.js",
+  "/wishlist/page": "app/wishlist/page.js"
 }

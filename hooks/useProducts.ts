@@ -386,8 +386,59 @@ export const useRelatedProducts = (productId: string, limit: number = 4) => {
       setState(prev => ({ ...prev, loading: true, error: null }));
       
       try {
-        const response = await apiService.getRelatedProducts(productId, limit);
+        // First, get the current product to extract brand and category
+        const currentProductResponse = await apiService.getProductById(productId);
         
+        if (!currentProductResponse.success || !currentProductResponse.data) {
+          throw new Error('Failed to fetch current product');
+        }
+
+        const currentProduct = currentProductResponse.data;
+        const { brand, category } = currentProduct;
+
+        if (!brand || !category) {
+          // Fallback to original related products if brand/category not available
+          const response = await apiService.getRelatedProducts(productId, limit);
+          
+          if (response.success && response.data) {
+            setState({
+              products: response.data,
+              loading: false,
+              error: null,
+            });
+          } else {
+            setState({
+              products: [],
+              loading: false,
+              error: response.message || 'Failed to fetch related products',
+            });
+          }
+          return;
+        }
+
+        // Only get products with EXACTLY the same brand AND same category
+        const response = await apiService.getRelatedProductsByBrandAndCategory(
+          brand, 
+          category, 
+          productId, 
+          limit
+        );
+
+        console.log(`Related products by brand (${brand}) and category (${category}):`, response);
+
+        // If API call fails, try to find related products locally
+        if (!response.success || !response.data || response.data.length === 0) {
+          const localRelatedProducts = await findLocalRelatedProducts(currentProduct, limit);
+          if (localRelatedProducts.length > 0) {
+            setState({
+              products: localRelatedProducts,
+              loading: false,
+              error: null,
+            });
+            return;
+          }
+        }
+
         if (response.success && response.data) {
           setState({
             products: response.data,
@@ -402,6 +453,24 @@ export const useRelatedProducts = (productId: string, limit: number = 4) => {
           });
         }
       } catch (error) {
+        // If all API calls fail, try local fallback
+        try {
+          const currentProductResponse = await apiService.getProductById(productId);
+          if (currentProductResponse.success && currentProductResponse.data) {
+            const localRelatedProducts = await findLocalRelatedProducts(currentProductResponse.data, limit);
+            if (localRelatedProducts.length > 0) {
+              setState({
+                products: localRelatedProducts,
+                loading: false,
+                error: null,
+              });
+              return;
+            }
+          }
+        } catch (fallbackError) {
+          console.error('Local fallback also failed:', fallbackError);
+        }
+
         setState({
           products: [],
           loading: false,
@@ -414,6 +483,54 @@ export const useRelatedProducts = (productId: string, limit: number = 4) => {
   }, [productId, limit]);
 
   return state;
+};
+
+// Helper function to find related products locally
+const findLocalRelatedProducts = async (currentProduct: any, limit: number): Promise<any[]> => {
+  try {
+    // Try to get all products and filter locally
+    const allProductsResponse = await apiService.getProducts({ limit: 100 });
+    
+    if (!allProductsResponse.success || !allProductsResponse.data) {
+      return [];
+    }
+
+    const allProducts = allProductsResponse.data;
+    const { brand, category, _id } = currentProduct;
+    
+    // Filter products by same brand and category, excluding current product
+    let relatedProducts = allProducts.filter(product => 
+      product._id !== _id && 
+      product.brand === brand && 
+      product.category === category
+    );
+
+    // If not enough, add products by same brand
+    if (relatedProducts.length < limit) {
+      const brandProducts = allProducts.filter(product => 
+        product._id !== _id && 
+        product.brand === brand && 
+        !relatedProducts.some(rp => rp._id === product._id)
+      );
+      relatedProducts = [...relatedProducts, ...brandProducts];
+    }
+
+    // If still not enough, add products by same category
+    if (relatedProducts.length < limit) {
+      const categoryProducts = allProducts.filter(product => 
+        product._id !== _id && 
+        product.category === category && 
+        !relatedProducts.some(rp => rp._id === product._id)
+      );
+      relatedProducts = [...relatedProducts, ...categoryProducts];
+    }
+
+    // Return limited results
+    return relatedProducts.slice(0, limit);
+  } catch (error) {
+    console.error('Error finding local related products:', error);
+    return [];
+  }
 };
 
 export const useProductsByCategory = (category: string, limit: number = 20) => {

@@ -75,17 +75,20 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({ onBack }) => {
     if (isSignedIn && user?.primaryEmailAddress?.emailAddress) {
       const fetchPreviousOrderData = async () => {
         try {
-          const response = await apiService.getCustomerOrdersByContact(user.primaryEmailAddress?.emailAddress)
-          if (response.success && response.data && response.data.length > 0) {
-            // Get the most recent order
-            const latestOrder = response.data[0]
-            if (latestOrder.shippingAddress) {
-              setFormData(prev => ({
-                ...prev,
-                street: latestOrder.shippingAddress.street || '',
-                city: latestOrder.shippingAddress.city || '',
-                region: latestOrder.shippingAddress.region || '',
-              }))
+          const email = user.primaryEmailAddress?.emailAddress
+          if (email) {
+            const response = await apiService.getOrdersByEmail(email)
+            if (response.success && response.data && response.data.length > 0) {
+              // Get the most recent order
+              const latestOrder = response.data[0]
+              if (latestOrder.shippingAddress) {
+                setFormData(prev => ({
+                  ...prev,
+                  street: latestOrder.shippingAddress.street || '',
+                  city: latestOrder.shippingAddress.city || '',
+                  region: latestOrder.shippingAddress.region || '',
+                }))
+              }
             }
           }
         } catch (error) {

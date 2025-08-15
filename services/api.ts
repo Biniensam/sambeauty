@@ -123,6 +123,12 @@ export interface CheckoutResponseData {
   customerId?: string; // Add customer ID for tracking
 }
 
+export interface CheckoutResponse {
+  success: boolean;
+  message: string;
+  data?: CheckoutResponseData;
+}
+
 export interface Customer {
   _id: string;
   fullName: string;
@@ -159,14 +165,11 @@ export interface CustomerOrder {
     city: string;
     region: string;
     country: string;
+    postalCode?: string;
+    fullName?: string;
+    phoneNumber?: string;
   };
   paymentMethod: string;
-}
-
-export interface CheckoutResponse {
-  success: boolean;
-  message: string;
-  data?: CheckoutResponseData;
 }
 
 class ApiService {
@@ -258,6 +261,34 @@ class ApiService {
     return this.request<Product[]>(`/products/${productId}/related?limit=${limit}`);
   }
 
+  // Get related products by same brand and category
+  async getRelatedProductsByBrandAndCategory(brand: string, category: string, excludeProductId: string, limit: number = 4): Promise<ApiResponse<Product[]>> {
+    const params = new URLSearchParams();
+    params.append('brand', brand);
+    params.append('category', category);
+    params.append('exclude', excludeProductId);
+    params.append('limit', limit.toString());
+    return this.request<Product[]>(`/products/related/brand-category?${params.toString()}`);
+  }
+
+  // Get related products by same brand only
+  async getRelatedProductsByBrand(brand: string, excludeProductId: string, limit: number = 4): Promise<ApiResponse<Product[]>> {
+    const params = new URLSearchParams();
+    params.append('brand', brand);
+    params.append('exclude', excludeProductId);
+    params.append('limit', limit.toString());
+    return this.request<Product[]>(`/products/related/brand?${params.toString()}`);
+  }
+
+  // Get related products by same category only
+  async getRelatedProductsByCategory(category: string, excludeProductId: string, limit: number = 4): Promise<ApiResponse<Product[]>> {
+    const params = new URLSearchParams();
+    params.append('category', category);
+    params.append('exclude', excludeProductId);
+    params.append('limit', limit.toString());
+    return this.request<Product[]>(`/products/related/category?${params.toString()}`);
+  }
+
   // Get product categories
   async getCategories(): Promise<ApiResponse<Array<{ category: string; count: number }>>> {
     return this.request<Array<{ category: string; count: number }>>(`/products/categories`);
@@ -315,40 +346,188 @@ class ApiService {
     }
   }
 
-  // Get customer by ID
-  async getCustomerById(customerId: string): Promise<ApiResponse<Customer>> {
-    return this.request<Customer>(`/customers/${customerId}`);
+  // Get orders by customer contact information
+  async getOrdersByContactInfo(
+    fullName: string,
+    phoneNumber: string,
+    email?: string
+  ): Promise<ApiResponse<CustomerOrder[]>> {
+    try {
+      // First try to get all orders and filter by customer info
+      const response = await this.request<any>('/orders');
+      
+      if (response.success && response.data) {
+        // Filter orders by customer information - be more strict about matching
+        const filteredOrders = response.data.filter((order: any) => {
+          // Get customer info from the order
+          const orderCustomerName = order.shippingAddress?.fullName || '';
+          const orderPhone = order.shippingAddress?.phoneNumber || '';
+          const orderEmail = order.customerEmail || order.customerInfo?.email || '';
+          
+          // More strict matching - only show orders that actually belong to this user
+          let nameMatch = false;
+          let phoneMatch = false;
+          let emailMatch = false;
+          
+          // Name matching - check if names are similar (allowing for slight variations)
+          if (fullName && orderCustomerName) {
+            const normalizedFullName = fullName.toLowerCase().trim();
+            const normalizedOrderName = orderCustomerName.toLowerCase().trim();
+            
+            // Exact match or if one name contains the other
+            nameMatch = normalizedFullName === normalizedOrderName ||
+                       normalizedFullName.includes(normalizedOrderName) ||
+                       normalizedOrderName.includes(normalizedFullName);
+          }
+          
+          // Phone matching - check if phone numbers match (allowing for format differences)
+          if (phoneNumber && orderPhone) {
+            const normalizedPhone = phoneNumber.replace(/\D/g, '');
+            const normalizedOrderPhone = orderPhone.replace(/\D/g, '');
+            
+            // Match if they're the same or if one ends with the other (for different formats)
+            phoneMatch = normalizedPhone === normalizedOrderPhone ||
+                        normalizedPhone.endsWith(normalizedOrderPhone) ||
+                        normalizedOrderPhone.endsWith(normalizedPhone);
+          }
+          
+          // Email matching - must be exact match if email exists
+          if (email && orderEmail) {
+            emailMatch = email.toLowerCase().trim() === orderEmail.toLowerCase().trim();
+          } else if (!email && !orderEmail) {
+            // If neither has email, consider it a match
+            emailMatch = true;
+          } else {
+            // If one has email and the other doesn't, it's not a match
+            emailMatch = false;
+          }
+          
+          // Order must match at least 2 out of 3 criteria to be considered the user's order
+          const matchCount = [nameMatch, phoneMatch, emailMatch].filter(Boolean).length;
+          return matchCount >= 2;
+        });
+        
+        console.log(`🔍 Found ${filteredOrders.length} orders matching user criteria out of ${response.data.length} total orders`);
+        
+        // Transform the filtered orders to match our CustomerOrder interface
+        const transformedOrders: CustomerOrder[] = filteredOrders.map((order: any) => ({
+          _id: order._id,
+          orderNumber: order.orderNumber,
+          date: order.createdAt,
+          items: order.items?.length || 0,
+          total: order.totalAmount,
+          status: order.status,
+          products: order.items?.map((item: any) => ({
+            name: item.productSnapshot?.name || item.productName || 'Unknown Product',
+            image: item.productSnapshot?.image || item.image || 'https://via.placeholder.com/150',
+            quantity: item.quantity,
+            price: item.price
+          })) || [],
+          customerId: order.customerId || '',
+          shippingAddress: {
+            street: order.shippingAddress?.street || '',
+            city: order.shippingAddress?.city || '',
+            region: order.shippingAddress?.region || '',
+            country: order.shippingAddress?.country || '',
+            postalCode: order.shippingAddress?.postalCode || '',
+            fullName: order.shippingAddress?.fullName || '',
+            phoneNumber: order.shippingAddress?.phoneNumber || ''
+          },
+          paymentMethod: order.paymentMethod || 'unknown'
+        }));
+        
+        return {
+          success: true,
+          message: `Found ${transformedOrders.length} orders for you`,
+          data: transformedOrders
+        };
+      }
+      
+      return {
+        success: false,
+        message: 'No orders found',
+        data: []
+      };
+    } catch (error) {
+      console.error('Error fetching orders by contact info:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to fetch orders',
+        data: []
+      };
+    }
   }
 
-  // Get customer orders by customer ID
-  async getCustomerOrders(customerId: string): Promise<ApiResponse<CustomerOrder[]>> {
-    return this.request<CustomerOrder[]>(`/customers/${customerId}/orders`);
-  }
+  // Get orders by email address only
+  async getOrdersByEmail(email: string): Promise<ApiResponse<CustomerOrder[]>> {
+    try {
+      if (!email) {
+        return {
+          success: false,
+          message: 'Email address is required',
+          data: []
+        };
+      }
 
-  // Update customer information
-  async updateCustomer(customerId: string, customerData: Partial<Customer>): Promise<ApiResponse<Customer>> {
-    return this.request<Customer>(`/customers/${customerId}`, {
-      method: 'PUT',
-      body: JSON.stringify(customerData),
-    });
-  }
-
-  // Find customer by email or phone number
-  async findCustomerByContact(email?: string, phoneNumber?: string): Promise<ApiResponse<Customer>> {
-    const params = new URLSearchParams();
-    if (email) params.append('email', email);
-    if (phoneNumber) params.append('phoneNumber', phoneNumber);
-    
-    return this.request<Customer>(`/customers/find?${params.toString()}`);
-  }
-
-  // Get customer orders by email or phone number
-  async getCustomerOrdersByContact(email?: string, phoneNumber?: string): Promise<ApiResponse<CustomerOrder[]>> {
-    const params = new URLSearchParams();
-    if (email) params.append('email', email);
-    if (phoneNumber) params.append('phoneNumber', phoneNumber);
-    
-    return this.request<CustomerOrder[]>(`/customers/orders/find?${params.toString()}`);
+      // Get all orders and filter by email
+      const response = await this.request<any>('/orders');
+      
+      if (response.success && response.data) {
+        // Filter orders by email address
+        const filteredOrders = response.data.filter((order: any) => {
+          const orderEmail = order.customerEmail || order.customerInfo?.email || '';
+          return orderEmail.toLowerCase().trim() === email.toLowerCase().trim();
+        });
+        
+        console.log(`🔍 Found ${filteredOrders.length} orders matching email ${email} out of ${response.data.length} total orders`);
+        
+        // Transform the filtered orders to match our CustomerOrder interface
+        const transformedOrders: CustomerOrder[] = filteredOrders.map((order: any) => ({
+          _id: order._id,
+          orderNumber: order.orderNumber,
+          date: order.createdAt,
+          items: order.items?.length || 0,
+          total: order.totalAmount,
+          status: order.status,
+          products: order.items?.map((item: any) => ({
+            name: item.productSnapshot?.name || item.productName || 'Unknown Product',
+            image: item.productSnapshot?.image || item.image || 'https://via.placeholder.com/150',
+            quantity: item.quantity,
+            price: item.price
+          })) || [],
+          customerId: order.customerId || '',
+          shippingAddress: {
+            street: order.shippingAddress?.street || '',
+            city: order.shippingAddress?.city || '',
+            region: order.shippingAddress?.region || '',
+            country: order.shippingAddress?.country || '',
+            postalCode: order.shippingAddress?.postalCode || '',
+            fullName: order.shippingAddress?.fullName || '',
+            phoneNumber: order.shippingAddress?.phoneNumber || ''
+          },
+          paymentMethod: order.paymentMethod || 'unknown'
+        }));
+        
+        return {
+          success: true,
+          message: `Found ${transformedOrders.length} orders for email ${email}`,
+          data: transformedOrders
+        };
+      }
+      
+      return {
+        success: false,
+        message: 'No orders found',
+        data: []
+      };
+    } catch (error) {
+      console.error('Error fetching orders by email:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to fetch orders',
+        data: []
+      };
+    }
   }
 }
 
@@ -364,13 +543,13 @@ export const {
   getSaleProducts,
   getProductById,
   getRelatedProducts,
+  getRelatedProductsByBrandAndCategory,
+  getRelatedProductsByBrand,
+  getRelatedProductsByCategory,
   getCategories,
   getBrands,
   searchProducts,
   submitCheckout,
-  getCustomerById,
-  getCustomerOrders,
-  updateCustomer,
-  findCustomerByContact,
-  getCustomerOrdersByContact,
+  getOrdersByContactInfo,
+  getOrdersByEmail,
 } = apiService;
